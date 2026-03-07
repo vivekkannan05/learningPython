@@ -1,0 +1,14 @@
+# IDE/Editor folders
+.cursor/
+.vscode/
+
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Output files
+content/output.txt
