@@ -1,0 +1,192 @@
+"""
+PDF Reader Project
+Reads a PDF file from the /content folder and writes its text content to output.txt
+"""
+
+import os
+from pathlib import Path
+from PyPDF2 import PdfReader
+import argparse
+import json
+import re
+
+def load_reegex_config() -> str:
+    config_path =Path(__file__).parent / "config.json"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Regex config file not found: {config_path}")
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    regex_pattern = config.get("regex", "")
+    if not regex_pattern:
+        raise ValueError("Regex pattern is not configured in config.json")
+    
+    try:
+        re.compile(regex_pattern)
+    except re.error as e:
+        raise ValueError(f"Invalid regex pattern in config.json: {e}")
+
+    return regex_pattern
+
+
+
+
+def get_content_folder() -> Path:
+    """Get the content folder path."""
+    return Path(__file__).parent / "content"
+
+
+def read_pdf_to_text(pdf_filename: str, page_number: int, regex_pattern: str) -> None:
+    """
+    Read a PDF file from the content folder and write its text to output.txt.
+    
+    Args:
+        pdf_filename: Name of the PDF file to read (e.g., "document.pdf")
+    
+    Raises:
+        FileNotFoundError: If content folder or PDF file doesn't exist
+        PermissionError: If unable to write to output file
+        Exception: For other PDF reading errors
+    """
+    content_folder = get_content_folder()
+    pdf_path = content_folder / pdf_filename
+    output_path = content_folder / "output.txt"
+    
+    # Check if content folder exists
+    if not content_folder.exists():
+        raise FileNotFoundError(
+            f"Content folder does not exist: {content_folder}\n"
+            "Please create the 'content' folder in the project directory."
+        )
+    
+    # Check if PDF file exists
+    if not pdf_path.exists():
+        raise FileNotFoundError(
+            f"PDF file not found: {pdf_path}\n"
+            "Please place a PDF file in the 'content' folder."
+        )
+    
+    # Check if PDF file is actually a PDF
+    if not pdf_filename.lower().endswith('.pdf'):
+        raise ValueError(f"File '{pdf_filename}' is not a PDF file.")
+    
+    try:
+        # Read PDF and extract text
+        print(f"Reading PDF: {pdf_path}")
+        reader = PdfReader(pdf_path)
+        
+        text_content = []
+        total_pages = len(reader.pages)
+
+        if page_number > total_pages or page_number < 1:
+            raise ValueError(f"Invalid page number: {page_number}. Must be between 1 and {total_pages}.")
+        
+        page = reader.pages[page_number - 1]
+        page_text = page.extract_text()
+        if not page_text:
+            page_text = "[No extractable text on this page]"
+        
+        matches = re.findall(regex_pattern, page_text)
+        if not matches:
+            print(f"No matches found for regex pattern: {regex_pattern}")
+            matched_text = "[No matches found for regex pattern]"
+        else:
+            matched_text = "\n".join(matches)
+
+        
+        full_text = f"--- Page {page_number}(regec: {regex_pattern}) ---\n{matched_text}\n"
+        # Write to output file
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(full_text)
+            print(f"Successfully wrote content to: {output_path}")
+            
+        except PermissionError:
+            raise PermissionError(
+                f"Permission denied: Unable to write to {output_path}\n"
+                "Please check file permissions."
+            )
+        except OSError as e:
+            raise OSError(f"Error writing output file: {e}")
+            
+    except Exception as e:
+        if "PDF" in str(type(e).__name__) or "pdf" in str(e).lower():
+            raise Exception(f"Error reading PDF file: {e}")
+        raise
+
+
+def list_pdf_files() -> list[str]:
+    """List all PDF files in the content folder."""
+    content_folder = get_content_folder()
+    
+    if not content_folder.exists():
+        return []
+    
+    return [f.name for f in content_folder.iterdir() if f.suffix.lower() == '.pdf']
+
+def parse_args() :
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Extract text from a specific page of a PDF file.")
+    parser.add_argument("page_number", type=int, help="The page number to extract text from.")
+    return parser.parse_args()
+
+
+def main():
+    """Main entry point for the PDF reader."""
+    print("=" * 50)
+    print("PDF to Text Converter(Regex Config)")
+    print("=" * 50)
+    
+    args = parse_args()
+    page_number = args.page_number
+    try:
+        regex_pattern = load_reegex_config()
+    except ValueError as e:
+        print(f"\nError: {e}")
+        return
+    # List available PDF files
+    pdf_files = list_pdf_files()
+    
+    if not pdf_files:
+        print("\nNo PDF files found in the content folder.")
+        print(f"Please add a PDF file to: {get_content_folder()}")
+        return
+    
+    print(f"\nFound {len(pdf_files)} PDF file(s):")
+    for i, pdf in enumerate(pdf_files, 1):
+        print(f"  {i}. {pdf}")
+    
+    # If only one PDF, use it automatically
+    if len(pdf_files) == 1:
+        pdf_filename = pdf_files[0]
+        print(f"\nProcessing: {pdf_filename}")
+    else:
+        # Let user choose
+        try:
+            choice = input("\nEnter the number of the PDF to process (or filename): ").strip()
+            if choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(pdf_files):
+                    pdf_filename = pdf_files[index]
+                else:
+                    print("Invalid selection.")
+                    return
+            else:
+                pdf_filename = choice
+        except KeyboardInterrupt:
+            print("\nOperation cancelled.")
+            return
+    
+    # Process the PDF
+    try:
+        read_pdf_to_text(pdf_filename, page_number, regex_pattern)
+        print("\nDone! Check output.txt in the content folder.")
+    except FileNotFoundError as e:
+        print(f"\nError: {e}")
+    except PermissionError as e:
+        print(f"\nPermission Error: {e}")
+    except Exception as e:
+        print(f"\nError processing PDF: {e}")
+
+
+if __name__ == "__main__":
+    main()
