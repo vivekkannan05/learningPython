@@ -7,6 +7,27 @@ import os
 from pathlib import Path
 from PyPDF2 import PdfReader
 import argparse
+import json
+import re
+
+def load_reegex_config() -> str:
+    config_path =Path(__file__).parent / "config.json"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Regex config file not found: {config_path}")
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    regex_pattern = config.get("regex", "")
+    if not regex_pattern:
+        raise ValueError("Regex pattern is not configured in config.json")
+    
+    try:
+        re.compile(regex_pattern)
+    except re.error as e:
+        raise ValueError(f"Invalid regex pattern in config.json: {e}")
+
+    return regex_pattern
+
+
 
 
 def get_content_folder() -> Path:
@@ -14,7 +35,7 @@ def get_content_folder() -> Path:
     return Path(__file__).parent / "content"
 
 
-def read_pdf_to_text(pdf_filename: str, page_number: int) -> None:
+def read_pdf_to_text(pdf_filename: str, page_number: int, regex_pattern: str) -> None:
     """
     Read a PDF file from the content folder and write its text to output.txt.
     
@@ -64,7 +85,15 @@ def read_pdf_to_text(pdf_filename: str, page_number: int) -> None:
         if not page_text:
             page_text = "[No extractable text on this page]"
         
-        full_text = f"--- Page {page_number} ---\n{page_text}\n"
+        matches = re.findall(regex_pattern, page_text)
+        if not matches:
+            print(f"No matches found for regex pattern: {regex_pattern}")
+            matched_text = "[No matches found for regex pattern]"
+        else:
+            matched_text = "\n".join(matches)
+
+        
+        full_text = f"--- Page {page_number}(regec: {regex_pattern}) ---\n{matched_text}\n"
         # Write to output file
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
@@ -104,12 +133,16 @@ def parse_args() :
 def main():
     """Main entry point for the PDF reader."""
     print("=" * 50)
-    print("PDF to Text Converter")
+    print("PDF to Text Converter(Regex Config)")
     print("=" * 50)
     
     args = parse_args()
     page_number = args.page_number
-
+    try:
+        regex_pattern = load_reegex_config()
+    except ValueError as e:
+        print(f"\nError: {e}")
+        return
     # List available PDF files
     pdf_files = list_pdf_files()
     
@@ -145,7 +178,7 @@ def main():
     
     # Process the PDF
     try:
-        read_pdf_to_text(pdf_filename, page_number)
+        read_pdf_to_text(pdf_filename, page_number, regex_pattern)
         print("\nDone! Check output.txt in the content folder.")
     except FileNotFoundError as e:
         print(f"\nError: {e}")

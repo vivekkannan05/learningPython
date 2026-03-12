@@ -1,0 +1,11 @@
+{
+    "question_regex": "(\\d+\\.\\s*[\\s\\S]+?)\\s*\\n(A\\).+)\\s*\\n(B\\).+)\\s*\\n(C\\).+)\\s*\\n(D\\).+)\\s*\\n(Answer:\\s*.+)",
+    "chapter_regex": "Chapter\\s+\\d+:\\s*(.+)",
+    "database": {
+        "host": "localhost",
+        "port": 3306,
+        "user": "root",
+        "password": "rootpassword",
+        "database": "question_bank"
+    }
+}
